@@ -8,10 +8,13 @@ import java.util.List;
 public record PnrStatusResponse(
         String pnr,
         String bookingStatus,
-        Long trainRunId,
+        String trainName,
+        String trainNumber,
         String coachType,
-        Long fromStationId,
-        Long toStationId,
+        String fromStation,
+        String fromStationCode,
+        String toStation,
+        String toStationCode,
         List<PassengerStatus> passengers
 ) {
     public record PassengerStatus(

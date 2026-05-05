@@ -18,6 +18,7 @@ import java.util.Optional;
 public class PnrStatusService {
 
     private final BookingRepository bookingRepository;
+    private final BookingLookupService lookupService;
     private final PnrCache pnrCache;
 
     @Transactional(readOnly = true)
@@ -49,13 +50,20 @@ public class PnrStatusService {
                         p.getWaitlistNumber(), p.getRacNumber()))
                 .toList();
 
+        BookingLookupService.TrainInfo trainInfo = lookupService.getTrainInfoByRunId(booking.getTrainRunId());
+        BookingLookupService.StationInfo fromStation = lookupService.getStationInfo(booking.getFromStationId());
+        BookingLookupService.StationInfo toStation = lookupService.getStationInfo(booking.getToStationId());
+
         return new PnrStatusResponse(
                 booking.getPnr(),
                 booking.getBookingStatus().name(),
-                booking.getTrainRunId(),
+                trainInfo != null ? trainInfo.trainName() : "Unknown",
+                trainInfo != null ? trainInfo.trainNumber() : "Unknown",
                 booking.getCoachType(),
-                booking.getFromStationId(),
-                booking.getToStationId(),
+                fromStation != null ? fromStation.name() : "Unknown",
+                fromStation != null ? fromStation.code() : "Unknown",
+                toStation != null ? toStation.name() : "Unknown",
+                toStation != null ? toStation.code() : "Unknown",
                 passengers);
     }
 }

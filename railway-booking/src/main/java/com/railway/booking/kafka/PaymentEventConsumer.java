@@ -6,6 +6,7 @@ import com.railway.booking.redis.SeatLockManager;
 import com.railway.booking.repository.BookingRepository;
 import com.railway.booking.repository.SeatInventoryRepository;
 import com.railway.booking.service.PnrStatusService;
+import com.railway.booking.service.SeatAssignmentService;
 import com.railway.booking.service.SeatAvailabilityService;
 import com.railway.common.event.EventEnvelope;
 import com.railway.common.event.PaymentEvent;
@@ -32,6 +33,7 @@ public class PaymentEventConsumer {
     private final SeatInventoryRepository seatInventoryRepository;
     private final SeatLockManager seatLockManager;
     private final SeatAvailabilityService availabilityService;
+    private final SeatAssignmentService seatAssignmentService;
     private final PnrStatusService pnrStatusService;
     private final BookingEventPublisher bookingEventPublisher;
     private final ObjectMapper objectMapper;
@@ -82,6 +84,11 @@ public class PaymentEventConsumer {
         }
         booking.getPassengers().forEach(p -> p.setStatus(finalStatus));
         bookingRepository.save(booking);
+
+        if (finalStatus == BookingStatus.CONFIRMED) {
+            seatAssignmentService.assignSeats(booking);
+            bookingRepository.saveAndFlush(booking);
+        }
 
         availabilityService.evictCache(booking.getTrainRunId(), booking.getCoachType());
         pnrStatusService.evictCache(booking.getPnr());

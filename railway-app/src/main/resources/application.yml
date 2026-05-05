@@ -57,7 +57,7 @@ spring:
         spring.json.value.default.type: com.railway.common.event.EventEnvelope
 
 server:
-  port: 8080
+  port: 8081
 
 app:
   jwt:

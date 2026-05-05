@@ -36,6 +36,7 @@ public class BookingService {
     private final PnrStatusService pnrStatusService;
     private final TrainRunService trainRunService;
     private final BookingEventPublisher bookingEventPublisher;
+    private final BookingLookupService lookupService;
 
     @Value("${app.booking.max-passengers-per-booking:6}")
     private int maxPassengers;
@@ -70,20 +71,21 @@ public class BookingService {
                     .orElseThrow(() -> new BusinessException("NO_INVENTORY",
                             "No seat inventory found for the requested segment"));
 
+            String pnr = pnrGenerator.generate();
+
             BookingStatus status;
             if (inventory.getAvailableSeats() >= passengerCount) {
                 status = BookingStatus.PAYMENT_PENDING;
-                String bookingId = pnrGenerator.generate();
                 seatLockManager.lockSeats(request.trainRunId(), request.coachType(),
                         request.fromStationId(), request.toStationId(),
-                        passengerCount, bookingId);
+                        passengerCount, pnr);
 
                 int updated = seatInventoryRepository.decrementAvailableSeats(
                         inventory.getId(), passengerCount, inventory.getVersion());
                 if (updated == 0) {
                     seatLockManager.releaseLock(request.trainRunId(), request.coachType(),
                             request.fromStationId(), request.toStationId(),
-                            passengerCount, bookingId);
+                            passengerCount, pnr);
                     throw new BusinessException("CONCURRENT_BOOKING",
                             "Seats were booked by another user. Please try again.");
                 }
@@ -107,8 +109,6 @@ public class BookingService {
                     }
                 }
             }
-
-            String pnr = pnrGenerator.generate();
             BigDecimal fare = calculateFare(request.coachType(), passengerCount);
 
             Booking booking = Booking.builder()
@@ -209,10 +209,15 @@ public class BookingService {
                         p.getStatus().name(), p.getWaitlistNumber(), p.getRacNumber()))
                 .toList();
 
+        BookingLookupService.StationInfo fromStation = lookupService.getStationInfo(booking.getFromStationId());
+        BookingLookupService.StationInfo toStation = lookupService.getStationInfo(booking.getToStationId());
+
         return new BookingResponse(
                 booking.getId(), booking.getPnr(), booking.getBookingStatus().name(),
                 booking.getTrainRunId(), booking.getCoachType(),
                 booking.getFromStationId(), booking.getToStationId(),
+                fromStation != null ? fromStation.name() : "Unknown",
+                toStation != null ? toStation.name() : "Unknown",
                 booking.getTotalFare(), booking.getPassengerCount(),
                 passengers, booking.getCreatedAt());
     }
