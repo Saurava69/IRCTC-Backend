@@ -6,6 +6,7 @@ import com.railway.booking.entity.SeatInventory;
 import com.railway.booking.repository.BookingRepository;
 import com.railway.booking.repository.SeatInventoryRepository;
 import com.railway.booking.service.PnrStatusService;
+import com.railway.booking.service.SeatAssignmentService;
 import com.railway.booking.service.SeatAvailabilityService;
 import com.railway.common.event.BookingEvent;
 import com.railway.common.event.EventEnvelope;
@@ -33,6 +34,7 @@ public class WaitlistPromotionConsumer {
     private final SeatInventoryRepository seatInventoryRepository;
     private final BookingEventPublisher bookingEventPublisher;
     private final SeatAvailabilityService availabilityService;
+    private final SeatAssignmentService seatAssignmentService;
     private final PnrStatusService pnrStatusService;
     private final ObjectMapper objectMapper;
     private final StringRedisTemplate stringRedisTemplate;
@@ -102,6 +104,9 @@ public class WaitlistPromotionConsumer {
             p.setRacNumber(null);
         });
         bookingRepository.save(racBooking);
+
+        seatAssignmentService.assignSeats(racBooking);
+        bookingRepository.saveAndFlush(racBooking);
 
         seatInventoryRepository.findBySegment(
                 cancelledEvent.trainRunId(), cancelledEvent.coachType(),

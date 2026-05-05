@@ -12,6 +12,8 @@ public record BookingResponse(
         String coachType,
         Long fromStationId,
         Long toStationId,
+        String fromStationName,
+        String toStationName,
         BigDecimal totalFare,
         int passengerCount,
         List<PassengerResponse> passengers,
