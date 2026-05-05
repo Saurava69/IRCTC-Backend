@@ -35,8 +35,8 @@ export const userApi = {
 };
 
 export const stationApi = {
-  search: (keyword = '', page = 0, size = 20) =>
-    api.get('/stations', { params: { keyword, page, size } }),
+  search: (q = '', page = 0, size = 20) =>
+    api.get('/stations', { params: { q, page, size } }),
   getByCode: (code) => api.get(`/stations/${code}`),
   create: (data) => api.post('/admin/stations', data),
 };

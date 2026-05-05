@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { bookingApi } from '@/api/client';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
@@ -10,13 +10,13 @@ import { Label } from '@/components/ui/label';
 import { Loader2, Train, XCircle, CreditCard } from 'lucide-react';
 import { toast } from 'sonner';
 
-const statusColors = {
-  CONFIRMED: 'bg-green-100 text-green-800 border-green-300',
-  PAYMENT_PENDING: 'bg-yellow-100 text-yellow-800 border-yellow-300',
-  RAC: 'bg-blue-100 text-blue-800 border-blue-300',
-  WAITLISTED: 'bg-orange-100 text-orange-800 border-orange-300',
-  CANCELLED: 'bg-red-100 text-red-800 border-red-300',
-  FAILED: 'bg-gray-100 text-gray-800 border-gray-300',
+const statusStyles = {
+  CONFIRMED: 'bg-emerald-50 border-emerald-200 text-emerald-700',
+  PAYMENT_PENDING: 'bg-amber-50 border-amber-200 text-amber-700',
+  RAC: 'bg-sky-50 border-sky-200 text-sky-700',
+  WAITLISTED: 'bg-orange-50 border-orange-200 text-orange-700',
+  CANCELLED: 'bg-red-50 border-red-200 text-red-700',
+  FAILED: 'bg-slate-50 border-slate-200 text-slate-700',
 };
 
 export default function MyBookings() {
@@ -63,93 +63,124 @@ export default function MyBookings() {
 
   if (loading && bookings.length === 0) {
     return (
-      <div className="flex items-center justify-center py-20">
-        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      <div className="flex flex-col items-center justify-center py-32 animate-fade-in">
+        <div className="relative">
+          <div className="absolute inset-0 bg-primary/20 rounded-full blur-xl animate-pulse" />
+          <Loader2 className="relative h-10 w-10 animate-spin text-primary" />
+        </div>
       </div>
     );
   }
 
   return (
-    <div className="space-y-6">
-      <h1 className="text-2xl font-bold">My Bookings</h1>
+    <div className="space-y-8 animate-fade-up">
+      <h1 className="font-[var(--font-display)] text-3xl text-foreground">My Bookings</h1>
 
       {bookings.length === 0 ? (
-        <Card className="text-center p-12">
-          <Train className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
-          <p className="text-lg font-medium">No bookings yet</p>
-          <Button className="mt-4" onClick={() => navigate('/')}>Book a Train</Button>
+        <Card className="text-center p-16 bg-card border-border">
+          <Train className="h-12 w-12 text-muted-foreground/30 mx-auto mb-4" />
+          <p className="font-[var(--font-display)] text-xl text-foreground">No bookings yet</p>
+          <p className="text-muted-foreground text-sm mt-1">Start your journey today</p>
+          <Button className="mt-6 bg-primary text-primary-foreground" onClick={() => navigate('/')}>
+            Book a Train
+          </Button>
         </Card>
       ) : (
         <div className="space-y-4">
-          {bookings.map((b) => (
-            <Card key={b.id} className="overflow-hidden">
-              <CardHeader className="pb-3">
-                <div className="flex items-center justify-between flex-wrap gap-2">
-                  <CardTitle className="text-base font-mono">{b.pnr}</CardTitle>
-                  <Badge className={statusColors[b.bookingStatus] || ''}>{b.bookingStatus}</Badge>
+          {bookings.map((b, idx) => (
+            <Card
+              key={b.id}
+              className="bg-card border-border hover:border-primary/30 transition-all duration-300 overflow-hidden brass-shimmer"
+              style={{ animationDelay: `${idx * 60}ms` }}
+            >
+              <CardContent className="p-6">
+                <div className="flex items-center justify-between flex-wrap gap-3 mb-4">
+                  <div>
+                    <p className="text-xs text-muted-foreground uppercase tracking-wider mb-0.5">PNR</p>
+                    <p className="font-mono text-foreground font-bold tracking-wide">{b.pnr}</p>
+                  </div>
+                  <Badge className={`${statusStyles[b.bookingStatus] || ''} border px-3 py-1 text-xs`}>
+                    {b.bookingStatus}
+                  </Badge>
                 </div>
-              </CardHeader>
-              <CardContent>
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-sm mb-4">
-                  <div>
-                    <p className="text-muted-foreground">Coach</p>
-                    <p className="font-semibold">{b.coachType?.replace('_', ' ')}</p>
-                  </div>
-                  <div>
-                    <p className="text-muted-foreground">Passengers</p>
-                    <p className="font-semibold">{b.passengerCount}</p>
-                  </div>
-                  <div>
-                    <p className="text-muted-foreground">Fare</p>
-                    <p className="font-semibold">₹{b.totalFare}</p>
-                  </div>
-                  <div>
-                    <p className="text-muted-foreground">Booked</p>
-                    <p className="font-semibold">{b.createdAt ? new Date(b.createdAt).toLocaleDateString() : '-'}</p>
-                  </div>
+
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-4">
+                  {[
+                    { label: 'From', value: b.fromStationName || '-' },
+                    { label: 'To', value: b.toStationName || '-' },
+                    { label: 'Coach', value: b.coachType?.replace('_', ' ') },
+                    { label: 'Fare', value: `₹${b.totalFare}` },
+                  ].map(({ label, value }) => (
+                    <div key={label} className="p-3 rounded-lg bg-secondary/50 border border-border">
+                      <p className="text-xs text-muted-foreground mb-0.5">{label}</p>
+                      <p className="font-semibold text-foreground text-sm">{value}</p>
+                    </div>
+                  ))}
                 </div>
 
                 {b.passengers?.length > 0 && (
-                  <div className="text-xs space-y-1 mb-4">
+                  <div className="space-y-1.5 mb-4">
                     {b.passengers.map((p, i) => (
-                      <div key={i} className="flex items-center gap-2 bg-muted px-2 py-1 rounded">
-                        <span className="font-medium">{p.name}</span>
+                      <div key={i} className="flex items-center gap-3 bg-secondary/50 border border-border px-3 py-2 rounded-lg text-xs">
+                        <span className="font-medium text-foreground">{p.name}</span>
                         <span className="text-muted-foreground">Age {p.age}</span>
-                        <Badge variant="outline" className="text-xs">{p.status}</Badge>
-                        {p.seatNumber && <span>Seat {p.seatNumber}</span>}
-                        {p.coachNumber && <span>Coach {p.coachNumber}</span>}
+                        <Badge variant="outline" className={`${statusStyles[p.status] || ''} text-xs border`}>
+                          {p.status}
+                        </Badge>
+                        {p.seatNumber && <span className="text-muted-foreground font-mono">Seat {p.seatNumber}</span>}
+                        {p.coachNumber && <span className="text-muted-foreground font-mono">Coach {p.coachNumber}</span>}
                       </div>
                     ))}
                   </div>
                 )}
 
-                <div className="flex gap-2">
+                <div className="flex gap-2 pt-2 border-t border-border">
                   {b.bookingStatus === 'PAYMENT_PENDING' && (
-                    <Button size="sm" onClick={() => navigate(`/payment/${b.id}`, { state: { booking: b } })}>
-                      <CreditCard className="h-4 w-4 mr-1" /> Pay Now
+                    <Button
+                      size="sm"
+                      className="bg-primary/10 border border-primary/20 text-primary hover:bg-primary hover:text-primary-foreground transition-all"
+                      onClick={() => navigate(`/payment/${b.id}`, { state: { booking: b } })}
+                    >
+                      <CreditCard className="h-3.5 w-3.5 mr-1.5" /> Pay Now
                     </Button>
                   )}
                   {['CONFIRMED', 'RAC', 'WAITLISTED', 'PAYMENT_PENDING'].includes(b.bookingStatus) && (
                     <Dialog open={cancelPnr === b.pnr} onOpenChange={(open) => { if (!open) setCancelPnr(null); }}>
                       <DialogTrigger asChild>
-                        <Button size="sm" variant="destructive" onClick={() => setCancelPnr(b.pnr)}>
-                          <XCircle className="h-4 w-4 mr-1" /> Cancel
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          className="text-destructive/80 hover:text-destructive hover:bg-destructive/10"
+                          onClick={() => setCancelPnr(b.pnr)}
+                        >
+                          <XCircle className="h-3.5 w-3.5 mr-1.5" /> Cancel
                         </Button>
                       </DialogTrigger>
-                      <DialogContent>
+                      <DialogContent className="bg-card border-border">
                         <DialogHeader>
-                          <DialogTitle>Cancel Booking</DialogTitle>
-                          <DialogDescription>
-                            Are you sure you want to cancel booking {b.pnr}? A refund will be initiated.
+                          <DialogTitle className="font-[var(--font-display)] text-xl">Cancel Booking</DialogTitle>
+                          <DialogDescription className="text-muted-foreground">
+                            Cancel booking <span className="font-mono text-foreground">{b.pnr}</span>? A refund will be initiated.
                           </DialogDescription>
                         </DialogHeader>
                         <div>
-                          <Label>Reason (optional)</Label>
-                          <Input value={cancelReason} onChange={(e) => setCancelReason(e.target.value)} placeholder="Reason for cancellation" />
+                          <Label className="text-xs uppercase tracking-widest text-muted-foreground font-medium">Reason (optional)</Label>
+                          <Input
+                            className="mt-2 bg-secondary/50 border-border focus:border-primary/50"
+                            value={cancelReason}
+                            onChange={(e) => setCancelReason(e.target.value)}
+                            placeholder="Reason for cancellation"
+                          />
                         </div>
-                        <DialogFooter>
-                          <Button variant="outline" onClick={() => setCancelPnr(null)}>Keep Booking</Button>
-                          <Button variant="destructive" onClick={handleCancel} disabled={cancelling}>
+                        <DialogFooter className="gap-2">
+                          <Button variant="outline" className="border-border" onClick={() => setCancelPnr(null)}>
+                            Keep Booking
+                          </Button>
+                          <Button
+                            className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                            onClick={handleCancel}
+                            disabled={cancelling}
+                          >
                             {cancelling ? 'Cancelling...' : 'Confirm Cancel'}
                           </Button>
                         </DialogFooter>
@@ -162,10 +193,28 @@ export default function MyBookings() {
           ))}
 
           {totalPages > 1 && (
-            <div className="flex justify-center gap-2">
-              <Button variant="outline" size="sm" disabled={page === 0} onClick={() => fetchBookings(page - 1)}>Previous</Button>
-              <span className="flex items-center text-sm text-muted-foreground">Page {page + 1} of {totalPages}</span>
-              <Button variant="outline" size="sm" disabled={page >= totalPages - 1} onClick={() => fetchBookings(page + 1)}>Next</Button>
+            <div className="flex justify-center items-center gap-4 pt-4">
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={page === 0}
+                onClick={() => fetchBookings(page - 1)}
+                className="border-border hover:border-primary/50"
+              >
+                Previous
+              </Button>
+              <span className="text-xs text-muted-foreground font-mono">
+                {page + 1} / {totalPages}
+              </span>
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={page >= totalPages - 1}
+                onClick={() => fetchBookings(page + 1)}
+                className="border-border hover:border-primary/50"
+              >
+                Next
+              </Button>
             </div>
           )}
         </div>
