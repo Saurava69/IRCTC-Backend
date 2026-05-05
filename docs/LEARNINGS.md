@@ -36,8 +36,9 @@
 27. [Real Bugs We Hit & Fixed (Phase 1-3)](#27-real-bugs-we-hit--fixed-phase-1-3)
 28. [Event Choreography — Cancellation Chain (Phase 5)](#28-event-choreography--cancellation-chain-phase-5)
 29. [Waitlist/RAC — Indian Railways Booking Model](#29-waitlistrac--indian-railways-booking-model)
-30. [What's Coming — Testing & Resilience](#30-whats-coming--testing--resilience)
-31. [Learning Resources](#31-learning-resources)
+30. [Scheduled Jobs (Phase 6)](#30-scheduled-jobs-phase-6)
+31. [React Frontend — Concepts & Patterns](#31-react-frontend--concepts--patterns)
+32. [Learning Resources](#32-learning-resources)
 
 ---
 
@@ -2249,15 +2250,152 @@ Extracting to a dedicated `BookingCleanupJob` class follows Single Responsibilit
 
 ---
 
-## 31. What's Coming — Testing & Resilience
+## 31. React Frontend — Concepts & Patterns
 
-### Phase 7: Production Hardening
+### Why React + Vite (Not Server-Side Rendering)
 
-Testcontainers (integration tests with real Docker containers), circuit breakers (gracefully handle downstream failures), structured logging, metrics.
+Our backend is a REST API. The frontend is a **Single Page Application (SPA)** — it loads once, then communicates with the backend via JSON APIs. This is the standard architecture for booking systems where:
+- The UI is highly interactive (autocomplete, dynamic forms, real-time updates)
+- The backend is already built as a REST API
+- SEO isn't critical (booking systems are behind auth)
+
+**Vite** replaced Create React App as the standard React build tool because it uses native ES modules for instant hot reload during development (no bundling needed until production build).
+
+### Key Frontend Patterns Used
+
+**1. Context API for Global State (AuthContext)**
+
+Instead of prop-drilling auth state through every component, React Context provides it globally:
+
+```jsx
+const AuthContext = createContext();
+
+export function AuthProvider({ children }) {
+  const [user, setUser] = useState(null);
+  const login = async (email, password) => { /* ... */ };
+  return <AuthContext.Provider value={{ user, login, logout }}>{children}</AuthContext.Provider>;
+}
+
+// Any component can access auth:
+const { user, isAuthenticated } = useAuth();
+```
+
+**When to use Context vs. other state management:**
+- Context: Auth state, theme, locale — things that change rarely and are needed everywhere
+- Local state (`useState`): Form inputs, loading states, UI toggles — component-scoped
+- For complex apps with frequent updates: Redux/Zustand (we don't need it here)
+
+**2. Debounced API Calls (Station Autocomplete)**
+
+Without debouncing, typing "Mumbai" fires 6 API requests (M, Mu, Mum, Mumb, Mumba, Mumbai). With debouncing (300ms), it fires 1:
+
+```jsx
+useEffect(() => {
+  if (query.length < 2) return;
+  const timer = setTimeout(async () => {
+    const { data } = await stationApi.search(query);
+    setSuggestions(data.content);
+  }, 300);
+  return () => clearTimeout(timer);  // Cancel if user types again within 300ms
+}, [query]);
+```
+
+The cleanup function (`return () => clearTimeout`) is the key — it cancels the previous timer every time the query changes, so only the final keystroke triggers the API call.
+
+**3. Axios Interceptors for JWT**
+
+Instead of manually adding the Authorization header to every request:
+
+```jsx
+const api = axios.create({ baseURL: '/api/v1' });
+
+api.interceptors.request.use((config) => {
+  const token = localStorage.getItem('token');
+  if (token) config.headers.Authorization = `Bearer ${token}`;
+  return config;
+});
+```
+
+Every request through this axios instance automatically includes the JWT. This is the "middleware" pattern applied to HTTP clients.
+
+**4. Route Protection Pattern**
+
+```jsx
+function ProtectedRoute({ children }) {
+  const { isAuthenticated } = useAuth();
+  if (!isAuthenticated) return <Navigate to="/login" />;
+  return children;
+}
+
+// Usage:
+<Route path="/book" element={<ProtectedRoute><BookingForm /></ProtectedRoute>} />
+```
+
+This is a **Higher-Order Component** pattern — wrapping a component with access control logic. The actual page component doesn't need to know about authentication.
+
+**5. Controlled Components (Forms)**
+
+Every form input is a "controlled component" — React state is the single source of truth:
+
+```jsx
+const [email, setEmail] = useState('');
+<Input value={email} onChange={(e) => setEmail(e.target.value)} />
+```
+
+The input always reflects `email` state. Changes go through `setEmail`. This makes validation, submission, and reset trivial — just manipulate the state.
+
+### CSS Architecture — TailwindCSS + CSS Variables
+
+**Why Tailwind instead of CSS Modules or styled-components?**
+- No naming fatigue — utilities are pre-named (`px-4`, `text-sm`, `bg-primary`)
+- No dead CSS — only used utilities are included in the bundle
+- Design system via CSS variables — change `--primary` once, updates everywhere
+- shadcn/ui integrates natively with Tailwind
+
+**Design tokens as CSS variables:**
+```css
+:root {
+  --primary: #2563eb;
+  --background: #f8f9fc;
+  --foreground: #1a1f36;
+  --border: #e2e8f0;
+}
+```
+
+Components use `text-primary`, `bg-background`, etc. — semantic names that map to CSS variables. Changing the entire color scheme requires editing only the variables.
+
+### Frontend-Backend Contract
+
+The most common bugs come from mismatched API contracts:
+
+| Mistake We Made | What Happened | Lesson |
+|----------------|---------------|--------|
+| Sent `keyword` param | Backend expected `q`, returned all stations | Always read the controller's `@RequestParam` name |
+| Expected PNR fields `trainRunId`, `fromStationId` | Backend returns `trainName`, `fromStation` | DTO names are the contract — check the Response class |
+| Called `/api/auth/login` | Correct path is `/api/v1/auth/login` | Always check the `@RequestMapping` prefix |
+
+**Rule**: The backend DTO class is the source of truth. Before writing frontend code for an endpoint, read the Response DTO in Java — that's exactly what the API returns.
+
+### What's Next — Production Hardening
+
+- **Testcontainers** — integration tests with real Docker containers
+- **Circuit breakers** — gracefully handle downstream failures
+- **Structured logging** — JSON logs for observability
+- **Metrics** — Micrometer + Prometheus for monitoring
 
 ---
 
 ## 32. Learning Resources
+
+### Frontend Resources
+
+| Resource | What You'll Learn |
+|----------|------------------|
+| [React docs](https://react.dev/) | Official React documentation — hooks, patterns, best practices |
+| [Vite docs](https://vitejs.dev/) | Build tool configuration and plugins |
+| [TailwindCSS docs](https://tailwindcss.com/docs) | Utility classes reference |
+| [shadcn/ui](https://ui.shadcn.com/) | Component library — copy-paste accessible components |
+| [Axios docs](https://axios-http.com/) | HTTP client with interceptors |
 
 ### Books (Highly Recommended)
 

@@ -29,6 +29,7 @@
 20. [Cancellation, Refund & Waitlist Promotion (Phase 5)](#20-cancellation-refund--waitlist-promotion--event-choreography-phase-5)
 21. [Scheduled Jobs (Phase 6)](#21-scheduled-jobs-phase-6)
 22. [File Reference Guide](#22-file-reference-guide)
+23. [React Frontend (Phase 7)](#23-react-frontend-phase-7)
 
 ---
 
@@ -1874,7 +1875,7 @@ mvn clean package -DskipTests
 mvn spring-boot:run -pl railway-app
 
 # 5. Open Swagger UI — test ALL APIs from the browser
-# http://localhost:8080/swagger-ui.html
+# http://localhost:8081/swagger-ui.html
 
 # 6. Open Kafka UI — see topics and messages
 # http://localhost:8090
@@ -1891,4 +1892,160 @@ docker exec -it railway-redis redis-cli KEYS '*'
 
 # 10. Connect to PostgreSQL
 docker exec -it railway-postgres psql -U railway railway_booking
+
+# 11. Start the React frontend
+cd railway-frontend && npm install && npx vite --port 5173
+# Open http://localhost:5173
 ```
+
+---
+
+## 23. React Frontend (Phase 7)
+
+Phase 7 adds a complete **React frontend** that exercises every backend API. The UI provides the full booking experience: search trains, book tickets, make payments, check PNR status, and an admin panel.
+
+### Tech Stack
+
+| Technology | Purpose |
+|-----------|---------|
+| **React 19** | UI library — functional components with hooks |
+| **Vite** | Build tool — instant HMR, fast bundling |
+| **React Router v6** | Client-side routing (BrowserRouter) |
+| **TailwindCSS v4** | Utility-first CSS framework |
+| **shadcn/ui** | Pre-built accessible components (Card, Button, Input, Dialog, Table, Badge) |
+| **Axios** | HTTP client with interceptors for JWT |
+| **Sonner** | Toast notifications |
+| **Lucide React** | Icon library |
+
+### Frontend Architecture
+
+```
+railway-frontend/
+├── index.html                 ← Entry point, Google Fonts (Inter)
+├── vite.config.js             ← Vite config with @ path alias
+├── src/
+│   ├── main.jsx               ← React entry, mounts App
+│   ├── App.jsx                ← Router setup, route definitions, layout
+│   ├── index.css              ← Tailwind config, CSS variables, animations
+│   ├── api/
+│   │   └── client.js          ← Axios instance + API modules (station, train, booking, pnr, payment)
+│   ├── context/
+│   │   └── AuthContext.jsx    ← JWT auth state, login/logout/register, localStorage persistence
+│   ├── components/
+│   │   ├── Navbar.jsx         ← Navigation with mobile responsive menu
+│   │   ├── ProtectedRoute.jsx ← Redirects unauthenticated users to /login
+│   │   ├── AdminRoute.jsx     ← Redirects non-admin users to /
+│   │   └── ui/                ← shadcn/ui components (button, card, input, etc.)
+│   └── pages/
+│       ├── Home.jsx           ← Search form (hero), station autocomplete, popular routes
+│       ├── Login.jsx          ← Email/password login
+│       ├── Register.jsx       ← Registration form
+│       ├── SearchResults.jsx  ← Train cards with availability per coach class
+│       ├── BookingForm.jsx    ← Multi-passenger form with berth preference
+│       ├── Payment.jsx        ← Payment method selection, success/failure states
+│       ├── MyBookings.jsx     ← User's bookings with cancel/pay actions
+│       ├── PnrStatus.jsx      ← PNR lookup with passenger table
+│       └── admin/
+│           ├── AdminDashboard.jsx   ← Admin home with links
+│           ├── ManageStations.jsx   ← CRUD stations
+│           ├── ManageTrains.jsx     ← CRUD trains
+│           ├── ManageRoutes.jsx     ← CRUD routes with stops
+│           ├── ManageSchedules.jsx  ← CRUD schedules
+│           ├── GenerateRuns.jsx     ← Generate train runs for date range
+│           └── AdminTools.jsx       ← Reindex ES, trigger scheduled jobs
+```
+
+### Key Design Decisions
+
+**1. API Client Pattern**
+
+A single axios instance with JWT interceptor handles all API calls:
+
+```javascript
+const api = axios.create({ baseURL: '/api/v1' });
+
+api.interceptors.request.use((config) => {
+  const token = localStorage.getItem('token');
+  if (token) config.headers.Authorization = `Bearer ${token}`;
+  return config;
+});
+```
+
+API modules are plain objects grouping related endpoints:
+```javascript
+export const stationApi = {
+  search: (q, page, size) => api.get('/stations', { params: { q, page, size } }),
+  getByCode: (code) => api.get(`/stations/${code}`),
+};
+```
+
+**2. Auth Context**
+
+React Context provides auth state to all components without prop drilling:
+- Stores JWT token + user info in state and localStorage
+- Provides `login()`, `register()`, `logout()` functions
+- Exposes `isAuthenticated`, `isAdmin`, `user` for conditional rendering
+
+**3. Station Autocomplete**
+
+Debounced search (300ms) with dropdown:
+- User types 2+ characters → API call with `q` param → shows suggestions
+- Each suggestion shows station name + code badge
+- Selection sets the station code as the form value
+
+**4. Protected Routes**
+
+```jsx
+<Route path="/book" element={<ProtectedRoute><BookingForm /></ProtectedRoute>} />
+<Route path="/admin" element={<AdminRoute><AdminDashboard /></AdminRoute>} />
+```
+
+`ProtectedRoute` checks `isAuthenticated`, redirects to `/login` if false.
+`AdminRoute` checks `isAdmin`, redirects to `/` if false.
+
+**5. Light Professional Theme**
+
+CSS variables in `index.css` define the design system:
+- Background: `#f8f9fc` (light gray)
+- Primary: `#2563eb` (blue)
+- Cards: white with subtle borders
+- Font: Inter (clean, professional)
+- No dark mode — optimized for readability and trust
+
+### Frontend ↔ Backend Integration
+
+| Frontend Action | Backend API | Notes |
+|----------------|-------------|-------|
+| Station autocomplete | `GET /stations?q=del` | Param is `q` not `keyword` |
+| Train search | `GET /trains/search?from=NDLS&to=BCT&date=2026-05-07` | Returns from Elasticsearch |
+| Create booking | `POST /bookings` | Body: trainRunId, coachType, fromStationId, toStationId, passengers[] |
+| Initiate payment | `POST /payments/initiate` | Body: bookingId, paymentMethod |
+| Check PNR | `GET /pnr/{pnr}` | Returns train name, stations, passenger details |
+| My bookings | `GET /bookings/my?page=0` | Paginated, includes station names |
+| Cancel booking | `POST /bookings/{pnr}/cancel` | Body: reason (optional) |
+
+### Seed Data (V8 Migration)
+
+`V8__seed_data.sql` provides a working dataset on first startup:
+
+| Entity | Count | Details |
+|--------|-------|---------|
+| Admin user | 1 | test@test.com / testadmin (ADMIN role) |
+| Stations | 10 | Major Indian railway stations |
+| Trains | 3 | Howrah Rajdhani, Mumbai Rajdhani, Chennai Mail |
+| Coaches | 23 | 1AC, 2AC, 3AC, Sleeper per train |
+| Routes | 3 | With intermediate stops and timings |
+| Schedules | 3 | All daily |
+| Train Runs | 21 | 7 days × 3 trains |
+| Seat Inventory | 84 | Per run, per coach type |
+
+All INSERTs use `ON CONFLICT DO NOTHING` for idempotency.
+
+### Common Frontend Issues & Fixes
+
+| Issue | Root Cause | Fix |
+|-------|-----------|-----|
+| Station search returns all | Frontend sent `keyword` param, backend expects `q` | Change to `{ params: { q } }` |
+| PNR shows empty stations | Redis cached old DTO format | Clear Redis: `redis-cli DEL "pnr:{pnr}"` |
+| Stale backend code | Maven local repo has old jars | `mvn install -DskipTests` before run |
+| Seat not assigned after payment | JPA didn't flush JdbcTemplate changes | Use `saveAndFlush()` in PaymentEventConsumer |

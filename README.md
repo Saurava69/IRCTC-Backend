@@ -1,65 +1,88 @@
 # Railway Ticket Booking System
 
-A full-featured railway ticket booking backend (similar to IRCTC) built as a **modular monolith** with Spring Boot 3.2, demonstrating distributed systems patterns at production scale.
+A full-featured railway ticket booking platform (similar to IRCTC) built as a **modular monolith** with Spring Boot 3.2 and a **React frontend**, demonstrating distributed systems patterns at production scale.
 
 ## Tech Stack
 
 | Layer | Technology |
 |-------|-----------|
 | **Framework** | Spring Boot 3.2.5, Java 17 |
-| **Database** | PostgreSQL 16 + Flyway migrations |
+| **Frontend** | React 19, Vite, TailwindCSS v4, shadcn/ui |
+| **Database** | PostgreSQL 15 + Flyway migrations (V1–V8) |
 | **Cache & Locking** | Redis 7 (distributed seat locks via Lua scripts, cache-aside, rate limiting) |
-| **Search** | Elasticsearch 8.13 (CQRS read model, full-text station/train search) |
+| **Search** | Elasticsearch 8 (CQRS read model, full-text station/train search) |
 | **Messaging** | Apache Kafka (event choreography, retry topics, dead letter topics) |
 | **Auth** | JWT (access + refresh tokens, role-based: USER / ADMIN) |
 | **API Docs** | SpringDoc OpenAPI 3 (Swagger UI at `/swagger-ui.html`) |
 | **Build** | Maven multi-module (7 modules) |
-| **Infra** | Docker Compose (PostgreSQL, Redis, Kafka, Zookeeper, Elasticsearch, Kibana, Kafka UI) |
+| **Infra** | Docker Compose (PostgreSQL, Redis, Kafka, Zookeeper, Elasticsearch, Kibana) |
 
 ## Architecture
 
 ```
-┌─────────────────────────────────────────────────────────────┐
-│                    railway-app (main)                        │
-│   Spring Boot entry point, Security, Kafka, Swagger config  │
-├────────┬────────┬──────────┬───────────┬───────────────────┤
-│railway-│railway-│ railway- │ railway-  │ railway-          │
-│ user   │ train  │ booking  │ payment   │ notification      │
-│        │        │          │           │                   │
-│ Auth   │Stations│ Bookings │ Payments  │ Kafka consumer    │
-│ JWT    │ Trains │ Seats    │ Mock GW   │ Logs all events   │
-│ Users  │ Routes │ PNR      │ Refunds   │ Retry + DLT      │
-│        │ Search │ Cancel   │           │                   │
-│        │ ES/CQRS│ Waitlist │           │                   │
-│        │        │ Scheduler│           │                   │
-├────────┴────────┴──────────┴───────────┴───────────────────┤
-│                    railway-common                            │
-│   Shared DTOs, events, exceptions, interfaces               │
-└─────────────────────────────────────────────────────────────┘
+┌──────────────────────────────────────────────────────────────────────┐
+│                         railway-frontend                              │
+│   React 19 + Vite + TailwindCSS + shadcn/ui                         │
+│   Station autocomplete, Train search, Booking, Payment, PNR status   │
+├──────────────────────────────────────────────────────────────────────┤
+│                              REST API                                 │
+├──────────────────────────────────────────────────────────────────────┤
+│                    railway-app (Spring Boot main)                     │
+│   Entry point, Security config, Kafka config, Swagger, Flyway        │
+├────────┬────────┬──────────┬───────────┬────────────────────────────┤
+│railway-│railway-│ railway- │ railway-  │ railway-                    │
+│ user   │ train  │ booking  │ payment   │ notification                │
+│        │        │          │           │                             │
+│ Auth   │Stations│ Bookings │ Payments  │ Kafka consumer              │
+│ JWT    │ Trains │ Seats    │ Mock GW   │ Logs all events             │
+│ Users  │ Routes │ PNR      │ Refunds   │ Retry + DLT                │
+│        │ Search │ Cancel   │           │                             │
+│        │ ES/CQRS│ Waitlist │           │                             │
+│        │        │ Scheduler│           │                             │
+├────────┴────────┴──────────┴───────────┴────────────────────────────┤
+│                    railway-common                                     │
+│   Shared DTOs, events, exceptions, interfaces                        │
+└──────────────────────────────────────────────────────────────────────┘
 ```
 
 ## Features
 
-### Booking Flow
-- **Search** trains by station name/code and date (Elasticsearch-powered)
-- **Check availability** with real-time seat counts (Redis-cached)
-- **Book** with distributed seat locking (Redis Lua scripts, 10-min TTL)
-- **Pay** via mock payment gateway (95% success rate simulation)
-- **PNR status** with passenger-level details
+### Full Booking Flow (End-to-End)
+1. **Search** trains by station name/code and date (Elasticsearch-powered)
+2. **Check availability** with real-time seat counts (Redis-cached)
+3. **Book** with distributed seat locking (Redis Lua scripts, 10-min TTL)
+4. **Pay** via mock payment gateway (80% success rate simulation)
+5. **Auto seat assignment** — Kafka event triggers seat allocation on payment success
+6. **PNR status** with passenger-level seat/coach details
 
 ### Indian Railways Model
 - **Confirmed / RAC / Waitlisted** booking statuses
-- Automatic **waitlist promotion** chain on cancellation (RAC -> Confirmed, Waitlisted -> RAC)
+- Automatic **waitlist promotion** chain on cancellation (Waitlisted → RAC → Confirmed)
 - Coach types: FIRST_AC, SECOND_AC, THIRD_AC, SLEEPER, GENERAL
+- Berth preferences: Lower, Middle, Upper, Side Lower, Side Upper
 
 ### Event-Driven Architecture
 ```
-Booking Cancel
+Booking Created → Payment Initiated
+  └─> PAYMENT_SUCCESS (Kafka)
+        ├─> Booking module: confirms booking + assigns seats
+        └─> Notification module: logs confirmation
+
+Booking Cancelled
   └─> BOOKING_CANCELLED (Kafka)
         ├─> Payment module: initiates refund
         ├─> Booking module: promotes waitlisted passengers
         └─> Notification module: logs cancellation alert
 ```
+
+### Frontend (React)
+- **Home** — Station autocomplete search with popular routes
+- **Search Results** — Train cards with per-class availability and fares
+- **Booking Form** — Multi-passenger with berth preference
+- **Payment** — UPI/Card/Net Banking with success/failure states
+- **My Bookings** — All bookings with cancel/pay actions
+- **PNR Status** — Full passenger status with seat assignments
+- **Admin Panel** — Manage stations, trains, routes, schedules, generate runs
 
 ### Scheduled Jobs
 | Job | Schedule | Purpose |
@@ -81,6 +104,7 @@ Booking Cancel
 - Java 17+
 - Maven 3.8+
 - Docker & Docker Compose
+- Node.js 18+ (for frontend)
 
 ### Run
 
@@ -91,36 +115,43 @@ docker compose -f docker/docker-compose.yml up -d
 # 2. Wait for all services to be healthy
 docker compose -f docker/docker-compose.yml ps
 
-# 3. Build and run
-mvn clean package -DskipTests
+# 3. Build and run backend
+mvn install -DskipTests
 mvn spring-boot:run -pl railway-app
+
+# 4. Start frontend (separate terminal)
+cd railway-frontend
+npm install
+npx vite --port 5173
 ```
 
-### Explore
+### Seed Data (Auto-loaded)
+
+The V8 Flyway migration automatically seeds the database on first run:
+- **Admin user:** test@test.com / testadmin
+- **10 stations:** New Delhi, Mumbai Central, Chennai Central, Howrah, Bangalore City, Jaipur, Bhopal, Nagpur, Prayagraj, Kanpur
+- **3 trains:** Howrah Rajdhani (12301), Mumbai Rajdhani (12951), Chennai Mail (12657)
+- **23 coaches** across all trains (1AC, 2AC, 3AC, Sleeper)
+- **3 routes** with intermediate stops and timings
+- **7 days of train runs** with full seat inventory
+
+### Access Points
 
 | URL | What |
 |-----|------|
+| http://localhost:5173 | Frontend (React app) |
 | http://localhost:8080/swagger-ui.html | Swagger UI (test all APIs) |
-| http://localhost:8090 | Kafka UI (topics & messages) |
 | http://localhost:5601 | Kibana (Elasticsearch queries) |
 
-### Getting Started (via Swagger UI)
+### End-to-End Test Flow
 
-1. **Register** — `POST /api/v1/auth/register`
-2. **Login** — `POST /api/v1/auth/login` (copy the `accessToken`)
-3. **Authorize** — Click the lock icon in Swagger UI, paste the token
-4. **Create station** — `POST /api/v1/admin/stations`
-5. **Create train** — `POST /api/v1/admin/trains`
-6. **Create route** — `POST /api/v1/admin/routes`
-7. **Create schedule** — `POST /api/v1/admin/schedules`
-8. **Generate train runs** — `POST /api/v1/admin/train-runs/generate`
-9. **Reindex ES** — `POST /api/v1/admin/search/reindex`
-10. **Search trains** — `GET /api/v1/trains/search?from=NDLS&to=ADI&date=2026-04-22`
-11. **Check availability** — `GET /api/v1/availability?trainRunId=1&coachType=SLEEPER`
-12. **Book** — `POST /api/v1/bookings`
-13. **Pay** — `POST /api/v1/payments/initiate`
-14. **Check PNR** — `GET /api/v1/pnr/{pnr}`
-15. **Cancel** — `POST /api/v1/bookings/{pnr}/cancel`
+1. Open http://localhost:5173
+2. Register a new account or login as test@test.com / testadmin
+3. Search: New Delhi → Mumbai Central, tomorrow's date
+4. Select a coach class and click "Book Now"
+5. Add passenger details, confirm booking
+6. Complete payment (80% auto-success)
+7. Check PNR status — seat assignment shows automatically
 
 ## API Endpoints
 
@@ -128,7 +159,7 @@ mvn spring-boot:run -pl railway-app
 |-----|-----------|------|
 | Auth | register, login, refresh | Public |
 | User | get profile, get by ID | JWT |
-| Stations | search, get by code, create | Public / Admin |
+| Stations | search (`GET /api/v1/stations?q=`), get by code, create | Public / Admin |
 | Trains | list, get by number, create | Public / Admin |
 | Train Search | search by route + date | Public |
 | Availability | check seat availability | Public |
@@ -150,11 +181,9 @@ railway-ticket-booking/
 ├── railway-booking/         Bookings, seats, PNR, cancellation, schedulers
 ├── railway-payment/         Payments, refunds, mock gateway
 ├── railway-notification/    Kafka consumer for all event notifications
-├── railway-app/             Spring Boot main app, configs, security
-├── docker/                  Docker Compose (7 services)
-└── docs/
-    ├── ARCHITECTURE.md      Detailed architecture decisions
-    └── LEARNINGS.md         Technology concepts and patterns guide
+├── railway-app/             Spring Boot main app, configs, security, migrations
+├── railway-frontend/        React 19 + Vite + TailwindCSS + shadcn/ui
+└── docker/                  Docker Compose (infrastructure services)
 ```
 
 ## Key Patterns Demonstrated
@@ -178,7 +207,18 @@ railway-ticket-booking/
 | 3 | Event-driven payment flow | Kafka, event choreography, retry topics |
 | 4 | CQRS search pipeline | Elasticsearch, Kafka-triggered indexing |
 | 5 | Cancellation, refund, waitlist promotion | Event chain, cross-module refund, RAC model |
-| 6 | Scheduled jobs | @Scheduled, ThreadPoolTaskScheduler, cron |
+| 6 | Scheduled jobs, Swagger annotations | @Scheduled, ThreadPoolTaskScheduler, cron |
+| 7 | React frontend, seed data, UI polish | React 19, Vite, TailwindCSS, shadcn/ui |
+
+## Troubleshooting
+
+| Issue | Fix |
+|-------|-----|
+| Backend runs stale code | `mvn install -DskipTests` then re-run |
+| PNR shows old data | Clear Redis: `redis-cli DEL "pnr:{pnr}"` |
+| Flyway migration fails on re-run | `DELETE FROM flyway_schema_history WHERE version = 'N'` |
+| Station search returns all stations | Ensure frontend uses `q` param (not `keyword`) |
+| Seat not assigned after payment | Check Kafka is running, verify `saveAndFlush()` in PaymentEventConsumer |
 
 ## License
 
