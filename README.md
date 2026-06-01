@@ -169,7 +169,7 @@ The V8 Flyway migration automatically seeds the database on first run:
 | Admin - Trains | create stations/trains/routes/schedules | Admin |
 | Admin - Bookings | generate train runs | Admin |
 | Admin - Search | reindex Elasticsearch | Admin |
-| Admin - Scheduler | trigger scheduled jobs | Admin |
+| Admin - Scheduler | trigger scheduled jobs like cleanup | Admin |
 
 ## Project Structure
 
