@@ -1,6 +1,6 @@
 # Railway Ticket Booking System
 
-A full-featured railway ticket booking platform (similar to IRCTC) built as a **modular monolith** with Spring Boot 3.2 and a **React frontend**, demonstrating distributed systems patterns at production scale.
+A full-featured railway ticket booking platform (similar to IRCTC) built with Spring Boot 3.2 and a **React frontend**, demonstrating distributed systems patterns at production scale.
 
 ## Tech Stack
 
